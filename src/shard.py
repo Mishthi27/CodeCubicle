@@ -9,17 +9,17 @@ from src.embeddings import EMBEDDING_DIMENSION
 
 VECTOR_NAME = "text"
 DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
-_mutable_shards: dict[Path, EdgeShard] = {}
+_shards: dict[Path, EdgeShard] = {}
 
 
-def get_mutable_shard(device_id: str | None = None) -> EdgeShard:
+def _get_shard(device_id: str | None, shard_name: str) -> EdgeShard:
     device_id = device_id or os.getenv("DEVICE_ID", "device-a")
     if not re.fullmatch(r"[A-Za-z0-9_-]+", device_id):
         raise ValueError("device_id may contain only letters, numbers, '_' and '-'")
 
-    path = (DATA_ROOT / device_id / "mutable").resolve()
-    if path in _mutable_shards:
-        return _mutable_shards[path]
+    path = (DATA_ROOT / device_id / shard_name).resolve()
+    if path in _shards:
+        return _shards[path]
 
     path.mkdir(parents=True, exist_ok=True)
     config = EdgeConfig(
@@ -35,13 +35,21 @@ def get_mutable_shard(device_id: str | None = None) -> EdgeShard:
     else:
         shard = EdgeShard.create(str(path), config)
 
-    _mutable_shards[path] = shard
+    _shards[path] = shard
     return shard
 
 
+def get_mutable_shard(device_id: str | None = None) -> EdgeShard:
+    return _get_shard(device_id, "mutable")
+
+
+def get_immutable_shard(device_id: str | None = None) -> EdgeShard:
+    return _get_shard(device_id, "immutable")
+
+
 def close_all_shards() -> None:
-    shards = list(_mutable_shards.values())
-    _mutable_shards.clear()
+    shards = list(_shards.values())
+    _shards.clear()
     for shard in shards:
         try:
             shard.flush()

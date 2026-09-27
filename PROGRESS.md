@@ -200,3 +200,44 @@ Known issues / TODOs carried forward:
 - The smoke test blocks Python socket connection entry points during insert/search and runs with `OFFLINE=1`; Wi-Fi/Ethernet was not physically disabled. No network call was attempted (zero blocked attempts).
 - FastEmbed's model must be present in its local cache before a first-ever disconnected run. The verified model is cached on this machine.
 - Qdrant server remains available from Phase 0, but Phase 1 performs no server calls.
+
+## Phase 2 — Immutable shard + merge/dedupe + dashboard v1 — 2026-09-27 18:57 +05:30
+
+Status: PASS
+
+What was built:
+- `src/shard.py`: adds an immutable Edge shard at `data/<device-id>/immutable/` using the same named 384-dimensional cosine vector config; existing mutable layout remains `data/<device-id>/mutable/`.
+- `src/read_path.py`: searches both shards, sorts by score descending, deduplicates by point ID (retaining the higher-scoring copy), and lists/deduplicates memories from both shards using Edge's real scroll API.
+- `dashboard/app.py`: Streamlit v1 with a sensitivity-aware add form, merged search results, measured latency, and a combined memory table showing sensitivity and sync status.
+- `scripts/smoke_test_phase2.py`: exercises real mutable/immutable shards, including empty-immutable passthrough, overlap and distinct IDs, score order, deduplication, and combined memory listing.
+
+What was run to verify it (commands + real output snippets):
+
+1) ` .\.venv\Scripts\python.exe scripts\smoke_test_phase2.py`:
+
+```text
+EMPTY_IMMUTABLE_PASSTHROUGH=PASS mutable_hits=1 immutable_hits=0
+DEDUP=PASS before=5 after=4 duplicates_removed=1
+MERGE_ORDER=PASS top_k=10 latency_ms=9.98 duplicate_score=0.9053 best_source_score=0.9053
+MEMORY_LIST=PASS listed=4 mutable=3 immutable=2
+PHASE2_SMOKE_OK mutable=3 immutable=2 unique_results=4
+```
+
+2) ` .\.venv\Scripts\python.exe -m streamlit run dashboard\app.py --server.headless true --server.port 8502`:
+
+```text
+Uvicorn server started on :::8502
+Local URL: http://localhost:8502
+```
+
+Browser verification at `http://localhost:8502`: the dashboard loaded with add-memory and search forms. Added `Valve 8 pressure measured 39 psi during the field inspection.` and searched `valve 8 pressure field inspection`; the UI displayed a search latency of **8.03 ms** and rendered the memory/results tables after the Streamlit rerun completed.
+
+Integration check with previous phases:
+- In one PowerShell session, ran ` .\.venv\Scripts\python.exe scripts\smoke_test_phase1.py` followed by ` .\.venv\Scripts\python.exe scripts\smoke_test_phase2.py`; both passed unchanged/in sequence.
+- Phase 1 output: `OFFLINE_SOCKET_GUARD=PASS blocked_attempts=0 OFFLINE=1`, all payload fields passed, and measured search times were 93.95 ms, 10.75 ms, and 7.63 ms (max 93.95 ms).
+- Phase 2 output: `EMPTY_IMMUTABLE_PASSTHROUGH=PASS`, `DEDUP=PASS before=5 after=4 duplicates_removed=1`, `MEMORY_LIST=PASS listed=4 mutable=3 immutable=2`, and `PHASE2_SMOKE_OK`.
+- Editor diagnostics reported no errors in the Phase 2 files.
+
+Known issues / TODOs carried forward:
+- Edge's WAL locks a shard for its owning process (`WouldBlock` when another process tries to load the same shard concurrently). Run only one process per device shard at a time; separate simulated devices continue to use separate shard directories.
+- The Streamlit server is intentionally left running at `http://localhost:8502` for hands-on use. Stop it with Ctrl+C in its terminal when finished.
