@@ -19,6 +19,7 @@ from qdrant_edge import (
 )
 
 from src.embeddings import EMBEDDING_DIMENSION
+from src.conflict import append_conflict, make_conflict_record
 from src.shard import (
     VECTOR_NAME,
     get_immutable_shard,
@@ -74,6 +75,8 @@ def _pending_points(device_id: str) -> list[Point]:
     for record in _scroll_all(mutable, with_vector=True):
         payload = dict(record.payload or {})
         if payload.get("sync_status") != "local_only":
+            continue
+        if payload.get("sync_decision", "sync") != "sync":
             continue
         if record.vector is None:
             raise RuntimeError(f"mutable point {record.id} has no vector")
@@ -166,15 +169,56 @@ def run_sync_once(
         client = QdrantClient(url=base_url)
         try:
             _ensure_collection(client, collection_name)
+            existing_by_id = {
+                str(server_point.id): server_point
+                for server_point in client.retrieve(
+                    collection_name=collection_name,
+                    ids=[str(point.id) for point in points],
+                    with_payload=True,
+                    with_vectors=False,
+                )
+            }
+            points_to_upload = []
+            conflict_records = []
+            for point in points:
+                server_point = existing_by_id.get(str(point.id))
+                if server_point is None:
+                    points_to_upload.append(point)
+                    continue
+
+                conflict = make_conflict_record(
+                    str(point.id),
+                    dict(point.payload or {}),
+                    dict(server_point.payload or {}),
+                )
+                if conflict is None:
+                    continue
+
+                conflict_records.append(conflict)
+                local_wins = conflict["winner"] == str(
+                    dict(point.payload or {}).get("device_id", "unknown")
+                )
+                if local_wins:
+                    points_to_upload.append(point)
+
             server_points = [
                 models.PointStruct(
                     id=str(point.id),
                     vector=dict(point.vector),
                     payload={**dict(point.payload), "sync_status": "synced"},
                 )
-                for point in points
+                for point in points_to_upload
             ]
-            client.upsert(collection_name=collection_name, points=server_points, wait=True)
+            if server_points:
+                client.upsert(
+                    collection_name=collection_name,
+                    points=server_points,
+                    wait=True,
+                )
+
+            for conflict in conflict_records:
+                append_conflict(conflict)
+                logger.warning("conflict resolved: %s", conflict["reason"])
 
             snapshot_bytes = _create_partial_snapshot(
                 base_url,
@@ -207,10 +251,23 @@ def run_sync_once(
                     len(remaining_synced_ids),
                 )
             if remaining_synced_ids:
-                raise RuntimeError(
-                    "timestamp purge left uploaded points in mutable shard: "
-                    + ", ".join(sorted(remaining_synced_ids))
+                logger.warning(
+                    "timestamp cutoff left uploaded IDs; applying exact-ID purge for %s points",
+                    len(remaining_synced_ids),
                 )
+                mutable.update(
+                    UpdateOperation.delete_points(sorted(remaining_synced_ids))
+                )
+                remaining_synced_ids = {
+                    str(record.id)
+                    for record in _scroll_all(mutable)
+                    if str(record.id) in synced_ids
+                }
+                if remaining_synced_ids:
+                    raise RuntimeError(
+                        "purge left uploaded points in mutable shard: "
+                        + ", ".join(sorted(remaining_synced_ids))
+                    )
 
             mutable_after = len(_scroll_all(mutable))
             immutable_after = len(_scroll_all(immutable))
@@ -235,6 +292,8 @@ def run_sync_once(
                 "offline": False,
                 "uploaded": len(points),
                 "point_ids": sorted(synced_ids),
+                "uploaded_ids": sorted(str(point.id) for point in points_to_upload),
+                "conflicts": conflict_records,
                 "snapshot_bytes": snapshot_bytes,
                 "purged_cutoff": cutoff,
                 "mutable_before": mutable_before,

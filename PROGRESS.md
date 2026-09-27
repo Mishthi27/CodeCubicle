@@ -303,3 +303,62 @@ DASHBOARD_WORKER_POINT [('ed103050-cfc2-413b-a9e3-a7de4afda12f', {'text': 'Valve
 ```
 
 - This validates the dashboard-started worker against the live server, in addition to the sequential Phase 1–3 smoke tests above. Diagnostics report no errors in `dashboard/app.py`, `src/sync_worker.py`, or `src/write_path.py`.
+
+## Phase 4 — Conflict handling + rule-based sync policy — 2026-09-27 20:05 +05:30
+
+Status: PASS
+
+What was built:
+- `src/policy_rules.py`: explainable decision function scores recency, access frequency, max cosine similarity to server-known memories (queried from the immutable shard), payload size, and sensitivity. The similarity input is the highest cosine similarity (higher means less novel); threshold is 0.50.
+- `src/write_path.py`: each write stores `sync_decision`, `sync_confidence`, `sync_reason`, and `novelty_score` alongside the established payload. Only `sync` decisions enter the upload queue; optional UUID/timestamp parameters support deterministic same-ID offline edits.
+- `src/sync_worker.py`: recovers only policy-approved pending records after restart, checks existing server points before upsert, records different-text same-ID conflicts, applies last-write-wins by timestamp and lexicographically greater device ID on ties, then continues the existing partial snapshot and purge pipeline.
+- `src/conflict.py`: emits inspectable ConflictRecords as JSON Lines at `data/conflicts.jsonl`, and provides conflict readback and deterministic winner selection.
+- `scripts/smoke_test_phase4.py`: policy decision matrix, a high-sensitivity non-upload check, and a real two-device same-UUID offline edit followed by live server sync and conflict-log verification.
+- Edge's timestamp filter intermittently left the exact-cutoff point after retries. The documented timestamp filter remains the primary purge; if uploaded IDs still remain, sync deletes only those exact IDs (already uploaded and restored), then verifies the result. This avoids widening the timestamp window and risking deletion of newer unsynced writes.
+
+What was run to verify it (commands + real output snippets):
+
+1) ` .\.venv\Scripts\python.exe scripts\smoke_test_phase4.py`:
+
+```text
+recent novel: sync confidence=0.70 similarity=0.10 reason=sync: recent, novel (score=0.70, threshold=0.50)
+frequently used: sync confidence=0.50 similarity=0.90 reason=sync: recent, frequently accessed, similar to server-known memories (score=0.50, threshold=0.50)
+stale novel: keep_local confidence=0.55 similarity=0.10 reason=keep_local: stale, novel (score=0.45, threshold=0.50)
+near duplicate: keep_local confidence=0.75 similarity=0.95 reason=keep_local: recent, similar to server-known memories (score=0.25, threshold=0.50)
+large memory: keep_local confidence=0.60 similarity=0.10 reason=keep_local: recent, novel, large (score=0.40, threshold=0.50)
+high sensitivity: keep_local confidence=0.99 similarity=0.10 reason=keep_local: recent, novel, high sensitivity (score=0.00, threshold=0.50)
+TWO_DEVICE_OFFLINE=PASS point_id=45296d76-1077-420b-b504-9b5a3e12f4d9 device_a=phase4-a-0e6e283c device_b=phase4-b-0e6e283c
+POLICY_GATE=PASS decision=keep_local queued=0 reason=keep_local: recent, novel, high sensitivity (score=0.00, threshold=0.50)
+CONFLICT_RECORD={"local_version": {"device_id": "phase4-b-0e6e283c", "text": "Device B reports the north bridge is closed after storm damage.", "timestamp": 1790519733.807974}, "point_id": "45296d76-1077-420b-b504-9b5a3e12f4d9", "reason": "greater timestamp wins (phase4-b-0e6e283c)", "resolution": "last_write_wins", "server_version": {"device_id": "phase4-a-0e6e283c", "text": "Device A reports the north bridge is open to foot traffic.", "timestamp": 1790519732.807974}, "winner": "phase4-b-0e6e283c"}
+CONFLICT_RESOLUTION=PASS server_winner=phase4-b-0e6e283c timestamp=1790519733.807974 logged=1 reason=greater timestamp wins (phase4-b-0e6e283c)
+PHASE4_CONFLICT_OK device_a_uploaded=1 device_b_uploaded=1 server_id=45296d76-1077-420b-b504-9b5a3e12f4d9
+PHASE4_SMOKE_OK
+```
+
+2) Ran the full integration sequence in one PowerShell session: Docker status, Phase 1, Phase 2, Phase 3 online, Phase 3 offline, then Phase 4. All passed:
+
+```text
+qdrant Up 7 hours 0.0.0.0:6333->6333/tcp, [::]:6333->6333/tcp
+PHASE1_SMOKE_OK inserted=6 queries=3 device_id=phase1-smoke-f24dc59c
+PHASE2_SMOKE_OK mutable=3 immutable=2 unique_results=4
+SERVER_POINT_COUNT before=15 after=17 uploaded=2
+SHARDS before_mutable=2 after_mutable=0 immutable_after=17 restored=2
+PARTIAL_SNAPSHOT=PASS bytes=235520 purged=2 cutoff=1790519723.943408
+PHASE3_ONLINE_OK device_id=phase3-smoke-a0c754c0 points=2
+OFFLINE_BRANCH=PASS blocked_attempts=0 local_hits=1 mutable=1 immutable=0 queued=1
+PHASE3_OFFLINE_OK device_id=phase3-offline-f7b8cd9d
+PHASE4_SMOKE_OK
+```
+
+Editor diagnostics reported no errors in the Phase 4 files.
+
+Integration check with previous phases:
+- Phase 1 offline insert/search still passes with all payload fields present and max search latency **7.21 ms** in the final run.
+- Phase 2 empty-immutable passthrough and overlap dedupe still pass: `before=5 after=4 duplicates_removed=1`; both-shard listing returns four unique points.
+- Phase 3 online upsert → partial snapshot → mutable purge and `OFFLINE=1` no-network path both pass with policy gating active.
+- Phase 4 then proves two offline device shards can write the same UUID and the later timestamp becomes the server version, with a matching JSONL ConflictRecord. The high-sensitivity write remains local and is absent from the server.
+
+Known issues / TODOs carried forward:
+- Rule confidence is a heuristic score margin, not a calibrated probability; a trained model/held-out metrics remain Phase 5 work.
+- Policy similarity is measured against the current device's immutable shard (the local server-known snapshot), not by querying the central server during an offline write.
+- Conflict log and smoke data are under ignored `data/`; server smoke points remain in `field_memories` to avoid destructive cleanup.
