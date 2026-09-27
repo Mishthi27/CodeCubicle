@@ -143,3 +143,60 @@ results = shard.query(
 )
 # later: shard.snapshot_manifest(); shard.update_from_snapshot(path); shard.flush(); shard.close()
 ```
+
+## Phase 1 — Mutable shard + local embeddings + offline search — 2026-09-27 16:13 +05:30
+
+Status: PASS
+
+What was built:
+- `src/embeddings.py`: lazy local FastEmbed wrapper using `BAAI/bge-small-en-v1.5`; verified output dimension is 384.
+- `src/shard.py`: cached mutable Edge shard per device at `data/<device-id>/mutable/`, configured with named `text` vector and cosine distance; reopens existing shards.
+- `src/write_path.py`: inserts UUID points with the complete Phase 1 payload and `sync_status="local_only"`.
+- `src/read_path.py`: embeds and searches the mutable shard only, returns payload and score, and logs wall-clock latency on every call.
+- `src/device.py`: `add` and `search` stdin CLI with `--device-id`, sensitivity, and top-k options.
+- `scripts/smoke_test_phase1.py`: inserts six memories and runs three searches with `OFFLINE=1` and socket connection entry points blocked.
+- The first run exposed that Edge requires the shard directory itself to exist before `EdgeShard.create`; `src/shard.py` now creates it.
+
+What was run to verify it (commands + real output snippets):
+
+1) Real local model dimension check:
+
+```text
+MODEL=BAAI/bge-small-en-v1.5 DIMENSION= 384
+```
+
+The model was downloaded/cached before the offline checks. Model provisioning therefore needs connectivity once; insert and search use the local cache.
+
+2) ` .\.venv\Scripts\python.exe scripts\smoke_test_phase1.py`:
+
+```text
+QUERY 'pressure readings for valve inspection': hits=3 wall_ms=14.77
+QUERY 'radio battery condition in the field': hits=3 wall_ms=7.38
+QUERY 'location of the damaged bridge': hits=3 wall_ms=7.32
+MODEL=BAAI/bge-small-en-v1.5 DIMENSION=384
+LATENCY_MS min=7.32 mean=9.82 max=14.77
+OFFLINE_SOCKET_GUARD=PASS blocked_attempts=0 OFFLINE=1
+PAYLOAD_FIELDS=PASS fields=access_count,device_id,last_accessed,sensitivity,size_bytes,sync_status,text,timestamp
+PHASE1_SMOKE_OK inserted=6 queries=3 device_id=phase1-smoke-bf680ff3
+```
+
+3) Separate-process CLI persistence check (stdin `add`, then stdin `search` using the same generated device ID):
+
+```text
+Inserted memory id=2f4934f4-da40-4e97-9d39-40610acaf856
+search latency_ms=651.88
+"score": 0.9116009473800659
+"text": "Field note: water pump inspection passed."
+"sync_status": "local_only"
+```
+
+The CLI process measurement includes cold model initialization and remained below one second. Editor diagnostics reported no errors in the six Phase 1 files.
+
+Integration check with previous phases:
+- N/A (first implementation phase; no earlier application smoke tests exist). Phase 0's Qdrant server/reference checks are recorded above and were not changed by this phase.
+- Phase 1 owns `data/<device-id>/mutable/`; Phase 2 must add `data/<device-id>/immutable/` beside it without renaming this directory.
+
+Known issues / TODOs carried forward:
+- The smoke test blocks Python socket connection entry points during insert/search and runs with `OFFLINE=1`; Wi-Fi/Ethernet was not physically disabled. No network call was attempted (zero blocked attempts).
+- FastEmbed's model must be present in its local cache before a first-ever disconnected run. The verified model is cached on this machine.
+- Qdrant server remains available from Phase 0, but Phase 1 performs no server calls.
