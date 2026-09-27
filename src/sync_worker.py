@@ -3,6 +3,7 @@ import logging
 import os
 import tempfile
 import threading
+import time
 from pathlib import Path
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -21,6 +22,7 @@ from qdrant_edge import (
 from src.embeddings import EMBEDDING_DIMENSION
 from src.conflict import append_conflict, make_conflict_record
 from src.shard import (
+    DATA_ROOT,
     VECTOR_NAME,
     get_immutable_shard,
     get_mutable_shard,
@@ -33,7 +35,9 @@ logger = logging.getLogger(__name__)
 upload_queue: list[tuple[str, Point]] = []
 _queue_lock = threading.Lock()
 _sync_lock = threading.Lock()
+_sync_log_lock = threading.Lock()
 _workers: dict[str, tuple[threading.Event, threading.Thread]] = {}
+SYNC_LOG_PATH = DATA_ROOT / "sync_log.jsonl"
 
 
 def enqueue_point(device_id: str, point: Point) -> None:
@@ -50,6 +54,26 @@ def queued_count(device_id: str | None = None) -> int:
 
 def _is_offline() -> bool:
     return os.getenv("OFFLINE", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _append_sync_event(event: dict) -> None:
+    SYNC_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(
+        {"timestamp": time.time(), **event},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    with _sync_log_lock:
+        with SYNC_LOG_PATH.open("a", encoding="utf-8") as sync_log:
+            sync_log.write(serialized + "\n")
+
+
+def read_sync_log(limit: int = 100) -> list[dict]:
+    if limit < 1 or not SYNC_LOG_PATH.exists():
+        return []
+    with SYNC_LOG_PATH.open("r", encoding="utf-8") as sync_log:
+        entries = [json.loads(line) for line in sync_log if line.strip()]
+    return list(reversed(entries[-limit:]))
 
 
 def _scroll_all(shard, with_vector: bool = False) -> list:
@@ -152,12 +176,14 @@ def run_sync_once(
         offline = _is_offline()
     if offline:
         logger.info("offline, skipping sync")
+        _append_sync_event({"device_id": device_id, "event": "offline_skipped"})
         return {"offline": True, "uploaded": 0, "pulled": 0, "purged": 0}
 
     with _sync_lock:
         points = _pending_points(device_id)
         if not points:
             logger.info("no pending points for device_id=%s", device_id)
+            _append_sync_event({"device_id": device_id, "event": "idle"})
             return {"offline": False, "uploaded": 0, "pulled": 0, "purged": 0}
 
         base_url = os.getenv("QDRANT_URL", "http://localhost:6333")
@@ -284,13 +310,13 @@ def run_sync_once(
             logger.info(
                 "sync complete device_id=%s uploaded=%s snapshot_bytes=%s purged_cutoff=%.6f",
                 device_id,
-                len(points),
+                len(server_points),
                 snapshot_bytes,
                 cutoff,
             )
-            return {
+            report = {
                 "offline": False,
-                "uploaded": len(points),
+                "uploaded": len(server_points),
                 "point_ids": sorted(synced_ids),
                 "uploaded_ids": sorted(str(point.id) for point in points_to_upload),
                 "conflicts": conflict_records,
@@ -301,6 +327,19 @@ def run_sync_once(
                 "immutable_after": immutable_after,
                 "purged": mutable_before - mutable_after,
             }
+            _append_sync_event(
+                {
+                    "device_id": device_id,
+                    "event": "sync_completed",
+                    "uploaded": report["uploaded"],
+                    "uploaded_ids": report["uploaded_ids"],
+                    "partial_snapshot_pulled": True,
+                    "snapshot_bytes": snapshot_bytes,
+                    "purged": report["purged"],
+                    "conflicts": conflict_records,
+                }
+            )
+            return report
         finally:
             client.close()
 

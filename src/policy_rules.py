@@ -6,8 +6,17 @@ NOVELTY_SIMILARITY_THRESHOLD = 0.75
 SYNC_SCORE_THRESHOLD = 0.50
 
 
-def decide(payload: dict, novelty_score: float) -> tuple[str, float, str]:
-    age_seconds = max(0.0, time.time() - float(payload.get("timestamp", time.time())))
+def decide(
+    payload: dict,
+    novelty_score: float,
+    *,
+    now: float | None = None,
+) -> tuple[str, float, str]:
+    current_time = time.time() if now is None else float(now)
+    age_seconds = max(
+        0.0,
+        current_time - float(payload.get("timestamp", current_time)),
+    )
     access_count = max(0, int(payload.get("access_count", 0)))
     size_bytes = max(0, int(payload.get("size_bytes", 0)))
     sensitivity = str(payload.get("sensitivity", "low")).lower()

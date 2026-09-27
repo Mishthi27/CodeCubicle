@@ -362,3 +362,142 @@ Known issues / TODOs carried forward:
 - Rule confidence is a heuristic score margin, not a calibrated probability; a trained model/held-out metrics remain Phase 5 work.
 - Policy similarity is measured against the current device's immutable shard (the local server-known snapshot), not by querying the central server during an offline write.
 - Conflict log and smoke data are under ignored `data/`; server smoke points remain in `field_memories` to avoid destructive cleanup.
+
+## Phase 5 — Trained sync policy + dashboard polish — 2026-09-27 22:09 +05:30
+
+Status: PASS
+
+What was built:
+- `scripts/simulate_usage_logs.py`: reproducible synthetic dataset generator (seed 42; 4,000 rows by default) labeled by the Phase 4 rule function across recency, access frequency, server similarity, size, and sensitivity.
+- `src/policy_model.py`: LogisticRegression with deterministic 80/20 stratified split; saves `data/policy_model.joblib` and `data/policy_metrics.json`. `python -m src.policy_model` trains from the generated CSV.
+- `src/write_path.py`: trained model is default (`SYNC_POLICY=model`); `SYNC_POLICY=rules` selects the Phase 4 fallback. Each memory stores decision, confidence, reason, and server-snapshot similarity.
+- `src/sync_worker.py`: append-only `data/sync_log.jsonl` events for offline skips, idle runs, uploads, partial snapshot pulls, purges, and conflict records.
+- `src/read_path.py`: per-device mutable/immutable counts for the dashboard.
+- `dashboard/app.py`: retains add/search/list; now shows per-shard counts, model metrics, sync history, conflict summaries and version details, policy decisions/reasons, and an Offline toggle connected to the worker's `OFFLINE` environment flag. Toggle state persists across reruns and device changes stop the old device worker.
+- `.streamlit/config.toml`: disables Streamlit's optional external usage telemetry for offline-first operation.
+- `README.md` and `.env.example`: document model generation/training and the `SYNC_POLICY` setting.
+- `scripts/smoke_test_phase5.py`: retrains and validates metrics, verifies both policy interfaces/fallback, performs the real two-device offline → online conflict/sync path, and checks the dashboard's sync-log, conflict, and shard-count data sources.
+
+What was run to verify it (commands + real output snippets):
+
+1) ` .\.venv\Scripts\python.exe scripts\simulate_usage_logs.py`:
+
+```text
+DATASET=...\data\policy_training.csv rows=4000 seed=42
+LABEL_COUNTS={'keep_local': 2735, 'sync': 1265}
+SAMPLE_ROWS= (five actual labeled rows printed)
+```
+
+2) ` .\.venv\Scripts\python.exe -m src.policy_model` and the trainer invoked by the Phase 5 smoke test both saved these computed held-out results:
+
+```text
+training_samples=3200
+held_out_samples=800
+accuracy=0.995
+sync_precision=0.984436
+sync_recall=1.0
+sync_f1=0.992157
+```
+
+3) Final ` .\.venv\Scripts\python.exe scripts\smoke_test_phase5.py`:
+
+```text
+HELD_OUT_METRICS accuracy=0.9950 sync_precision=0.9844 sync_recall=1.0000 f1=0.9922 train=3200 test=800
+METRICS_SAVED=...\data\policy_metrics.json
+POLICY_INTERFACES=PASS model=sync rules=sync model_confidence=0.9620
+RULES_FALLBACK=PASS decision=sync reason=sync: recent, novel (score=0.70, threshold=0.50)
+FULL_PIPELINE=PASS point_id=568c3d16-a4ca-4226-848e-0df9960805a2 device_a=phase5-a-36421b78 device_b=phase5-b-36421b78 server_winner=phase5-b-36421b78
+SYNC_LOG=PASS events=2 uploads=2 conflict_events=1
+CONFLICT_VIEW_DATA=PASS matching_records=1 winner=phase5-b-36421b78
+SHARD_COUNTS device_a={'mutable': 0, 'immutable': 22} device_b={'mutable': 0, 'immutable': 22}
+PHASE5_PIPELINE_OK uploaded_a=1 uploaded_b=1 winner=phase5-b-36421b78
+PHASE5_SMOKE_OK
+```
+
+4) Dashboard at `http://localhost:8502` was checked in the browser. It rendered all four data grids and the accuracy/precision/recall metrics with actual sync and conflict data. The Offline toggle was exercised both directions; while enabled it generated persisted `offline_skipped` events (84 observed during the check), and the app was returned to online mode. At 390px the dashboard showed all sections with document width equal to viewport width; desktop check at 1280px also had no overflow. `.streamlit/config.toml` is recognized as `gatherUsageStats = false`.
+
+Integration check with previous phases:
+- The Phase 5 script exercised two devices with `OFFLINE=1`, then synced both through the real server and partial snapshot flow; the later timestamp won and the same ConflictRecord was present in the UI data source.
+- The sync log contained two completion events, two uploads, and one conflict event; both devices had empty mutable shards and populated immutable shards after sync.
+- The `SYNC_POLICY=rules` fallback produced a valid decision through the same write interface. The default trained policy produced explainable confidence/reason fields.
+- Editor diagnostics report no errors in the Phase 5 source, script, or dashboard files.
+
+Known issues / TODOs carried forward:
+- The labels are generated by Phase 4's rules, so these metrics measure the model's ability to reproduce that policy on held-out synthetic examples, not real-world sync quality or an independently human-labeled dataset. Preserve that caveat on any demo slide.
+- The classifier's `confidence` is the model's class probability, while Phase 4 rule confidence remains a heuristic margin.
+- Model/data/metrics/conflict/sync log artifacts live under ignored `data/`; a fresh checkout must run the two README training commands before using the default trained policy.
+- The dashboard is running at `http://localhost:8502` with the Offline toggle returned to false. Qdrant smoke data remains in `field_memories` to avoid destructive cleanup.
+
+### Phase 5 final verification addendum — 2026-09-28 00:07 +05:30
+
+- Fixed the Offline widget to use explicit Streamlit session state and an `on_change` callback. Verified keyboard toggle transitions `false → true → false`; the worker recorded `offline_skipped` events while enabled, and the shared dashboard was returned to online mode.
+- Restarted the dashboard after adding `.streamlit/config.toml`; HTTP/browser loads succeed and the app no longer makes Streamlit usage-stat telemetry requests. The dashboard displays all four data grids and the saved 99.5% / 98.4% / 100.0% metrics. Desktop width 1280 and mobile width 390 both had no horizontal overflow.
+- Re-ran ` .\.venv\Scripts\python.exe scripts\smoke_test_phase5.py` against the final code; it passed:
+
+```text
+HELD_OUT_METRICS accuracy=0.9950 sync_precision=0.9844 sync_recall=1.0000 f1=0.9922 train=3200 test=800
+FULL_PIPELINE=PASS point_id=a74f2a54-8791-48eb-b601-b9a7c5a5c883 device_a=phase5-a-63ca0579 device_b=phase5-b-63ca0579 server_winner=phase5-b-63ca0579
+SYNC_LOG=PASS events=2 uploads=2 conflict_events=1
+CONFLICT_VIEW_DATA=PASS matching_records=1 winner=phase5-b-63ca0579
+SHARD_COUNTS device_a={'mutable': 0, 'immutable': 23} device_b={'mutable': 0, 'immutable': 23}
+PHASE5_PIPELINE_OK uploaded_a=1 uploaded_b=1 winner=phase5-b-63ca0579
+PHASE5_SMOKE_OK
+```
+
+- Final diagnostics: no errors in `dashboard/app.py`, `src/policy_model.py`, or `scripts/smoke_test_phase5.py`.
+
+## Phase 6 — Local Ask + two-device demo run — 2026-09-28 01:21 +05:30
+
+Status: PASS (GGUF model omitted; documented retrieval-template fallback used)
+
+What was built:
+- `src/llm.py`: grounded local `answer(query, retrieved_memories)` fallback uses only retrieved memory text, deduplicates repeated excerpts, and returns a clear no-match response.
+- `dashboard/app.py`: Ask view searches both local shards and displays the response together with scored source memories.
+- `src/device.py`: adds the `ask` CLI command and accepts `--point-id` / `--timestamp` on `add` for repeatable same-ID offline edits.
+- `scripts/smoke_test_phase6.py`: verifies Ask/search under a socket-connection guard, then launches two actual CLI subprocesses concurrently for each of two rounds. Each round uses fresh `device-a-phase6-*` / `device-b-phase6-*` shards, writes the same UUID while offline, searches locally, switches online, syncs both devices through Qdrant, and checks LWW winner, sync/conflict logs, and empty mutable shards.
+- `README.md`: documents the Phase 6 Ask fallback and rehearsal command.
+- Optional llama.cpp/GGUF inference was not enabled. `llama_cpp` was unavailable, no GGUF was cached, and `pip download --only-binary` failed because the configured package-index connection was reset. Following the build plan's fallback, Ask uses local retrieval plus a grounded answer template; no external model call is made.
+
+What was run to verify it (commands + real output snippets):
+
+1) Runtime/model availability check:
+
+```text
+llama_cpp_available= False
+No GGUF files found in the workspace or checked Hugging Face cache.
+pip download --only-binary=:all: --no-deps llama-cpp-python==0.3.16
+WARNING: ... ConnectionResetError(10054, ...)
+ERROR: No matching distribution found for llama-cpp-python
+```
+
+System capacity was 15.4 GB RAM and 255.6 GB free disk; no source build was attempted after the wheel lookup failed.
+
+2) ` .\.venv\Scripts\python.exe scripts\smoke_test_phase6.py` run twice separately (each invocation itself runs two rounds):
+
+```text
+Invocation 1:
+ASK_OFFLINE=PASS blocked_attempts=0 sources=1 answer=The closest local memory says: The west pump uses a 12 volt replacement battery.
+ROUND_1_PASS point_id=4234f3a9-ea37-42be-9139-23ae9e05096f offline_hits=1 winner=device-b-phase6-ffba42ce sync_events=2 conflict_records=1 mutable_a=0 mutable_b=0
+ROUND_2_PASS point_id=f2bb9e01-e7fd-4c1c-8140-cfb6f38a9cd6 offline_hits=1 winner=device-b-phase6-e16510b2 sync_events=2 conflict_records=1 mutable_a=0 mutable_b=0
+PHASE6_SMOKE_OK rounds=2 device_processes=4
+
+Invocation 2:
+ASK_OFFLINE=PASS blocked_attempts=0 sources=1 answer=The closest local memory says: The west pump uses a 12 volt replacement battery.
+ROUND_1_PASS point_id=25f8166b-666a-4670-b20b-59b8606b79f0 offline_hits=1 winner=device-b-phase6-9b573022 sync_events=2 conflict_records=1 mutable_a=0 mutable_b=0
+ROUND_2_PASS point_id=0b3d7c71-b513-4360-aa7a-8ce7ad6b8119 offline_hits=1 winner=device-b-phase6-4f490096 sync_events=2 conflict_records=1 mutable_a=0 mutable_b=0
+PHASE6_SMOKE_OK rounds=2 device_processes=4
+```
+
+Each invocation ran four separate device processes (two concurrent processes in each of two rounds); all four rounds synced to the live server, logged conflicts, selected the later Device B version, and purged both mutable copies.
+
+3) Dashboard browser check at `http://localhost:8502`: submitted `What did the field team record about pressure?`; the UI returned `The closest local memory says: A field report records river gauge level at 2.4 meters.` and displayed its source-memory table. Offline toggle was false after verification. Existing Phase 5 metrics, sync log, conflicts, and shard views remained present.
+
+4) Editor diagnostics report no errors in `src/llm.py`, `src/device.py`, `scripts/smoke_test_phase6.py`, or `dashboard/app.py`.
+
+Integration check with previous phases:
+- The Phase 6 rehearsal uses the Phase 1 embedder/shards, Phase 2 merged local search, Phase 3 real Qdrant upsert/partial snapshot/purge, Phase 4 conflict LWW/logging, and Phase 5 trained-policy decision in four actual device CLI processes per invocation.
+- Both standalone invocations passed twice consecutively; final online dashboard remains at `http://localhost:8502`.
+
+Known issues / TODOs carried forward:
+- The optional local GGUF generator was intentionally omitted because this machine has no cached model or installed llama.cpp runtime and the configured pip index reset the wheel lookup. Ask is a transparent grounded retrieval template, not an LLM-generated answer.
+- The repeated rehearsal uses unique device IDs with the required `device-a` / `device-b` prefixes so it does not overwrite the persistent demo shards or contend with the dashboard's open device-a WAL.

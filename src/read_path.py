@@ -76,3 +76,27 @@ def list_memories(device_id: str | None = None, limit: int = 100) -> list[dict]:
         key=lambda result: result["payload"].get("timestamp", 0),
         reverse=True,
     )[:limit]
+
+
+def shard_counts(device_id: str) -> dict[str, int]:
+    counts = {}
+    for shard_name, shard in (
+        ("mutable", get_mutable_shard(device_id)),
+        ("immutable", get_immutable_shard(device_id)),
+    ):
+        count = 0
+        offset = None
+        while True:
+            records, offset = shard.scroll(
+                ScrollRequest(
+                    offset=offset,
+                    limit=512,
+                    with_payload=False,
+                    with_vector=False,
+                )
+            )
+            count += len(records)
+            if offset is None or not records:
+                break
+        counts[shard_name] = count
+    return counts

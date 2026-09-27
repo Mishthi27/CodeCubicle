@@ -35,6 +35,26 @@ Windows has no `make`; the commands above are the Makefile `setup` / `backend` /
 
 See `BUILD_PLAN.md` for phases and `PROGRESS.md` for verification logs.
 
+### Train the sync policy (Phase 5)
+
+The trained policy is the default (`SYNC_POLICY=model`). Generate its labeled dataset and save the model/held-out metrics before starting the dashboard:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\simulate_usage_logs.py
+.\.venv\Scripts\python.exe -m src.policy_model
+.\.venv\Scripts\python.exe -m streamlit run dashboard\app.py
+```
+
+The model, dataset, and metrics are stored under the ignored `data/` directory. Set `SYNC_POLICY=rules` in `.env` to use the Phase 4 fallback.
+
+### Phase 6 Ask mode
+
+Ask retrieves local memories and builds a short answer from their text. The optional llama.cpp/GGUF backend was not enabled in this environment because no local model/runtime was cached and pip could not resolve a Windows `llama-cpp-python` wheel; the grounded retrieval answer is the documented fallback. The two-device rehearsal is available as:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\smoke_test_phase6.py
+```
+
 ## Defaults chosen in Phase 0
 
 | Item | Choice |

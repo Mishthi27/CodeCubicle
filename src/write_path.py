@@ -1,10 +1,12 @@
 import time
+import os
 from uuid import uuid4
 
 from qdrant_edge import Point, Query, QueryRequest, UpdateOperation
 
 from src.embeddings import embed
-from src.policy_rules import decide
+from src.policy_model import decide as decide_model
+from src.policy_rules import decide as decide_rules
 from src.shard import VECTOR_NAME, get_immutable_shard, get_mutable_shard
 from src.sync_worker import enqueue_point
 
@@ -42,7 +44,13 @@ def insert_memory(
         "sensitivity": sensitivity,
         "sync_status": "local_only",
     }
-    decision, confidence, reason = decide(payload, novelty_score)
+    policy_name = os.getenv("SYNC_POLICY", "model").strip().lower()
+    if policy_name == "rules":
+        decision, confidence, reason = decide_rules(payload, novelty_score)
+    elif policy_name == "model":
+        decision, confidence, reason = decide_model(payload, novelty_score)
+    else:
+        raise ValueError("SYNC_POLICY must be 'model' or 'rules'")
     payload.update(
         {
             "sync_decision": decision,
