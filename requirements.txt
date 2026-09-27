@@ -1,0 +1,8 @@
+# Python 3.11 required (qdrant-edge-demo: >=3.11,<3.14).
+# Install: py -3.11 -m venv .venv && .venv\Scripts\pip install -r requirements.txt
+qdrant-edge-py==0.8.0
+qdrant-client==1.19.1
+fastembed==0.8.1
+streamlit==1.64.0
+scikit-learn==1.9.1
+python-dotenv==1.2.3

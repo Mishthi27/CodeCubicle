@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+data/
+!data/.gitkeep
+
+# Official demo local artifacts (do not commit models, shards, or the 62MB video)
+reference/qdrant-edge-demo/.venv/
+reference/qdrant-edge-demo/demo-data/
+reference/qdrant-edge-demo/models/
+reference/qdrant-edge-demo/input.mp4
