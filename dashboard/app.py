@@ -4,6 +4,7 @@ import time
 import streamlit as st
 
 from src.read_path import list_memories, search
+from src.sync_worker import start_sync_worker
 from src.write_path import insert_memory
 
 
@@ -19,6 +20,8 @@ device_id = st.sidebar.text_input(
 if not device_id:
     st.error("Enter a device ID to continue.")
     st.stop()
+
+start_sync_worker(device_id)
 
 add_column, search_column = st.columns([0.9, 1.1], gap="large")
 

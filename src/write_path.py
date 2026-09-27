@@ -5,6 +5,7 @@ from qdrant_edge import Point, UpdateOperation
 
 from src.embeddings import embed
 from src.shard import VECTOR_NAME, get_mutable_shard
+from src.sync_worker import enqueue_point
 
 
 def insert_memory(
@@ -33,4 +34,5 @@ def insert_memory(
         payload=payload,
     )
     get_mutable_shard(device_id).update(UpdateOperation.upsert_points([point]))
+    enqueue_point(device_id, point)
     return point_id

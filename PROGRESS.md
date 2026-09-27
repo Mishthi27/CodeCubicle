@@ -241,3 +241,65 @@ Integration check with previous phases:
 Known issues / TODOs carried forward:
 - Edge's WAL locks a shard for its owning process (`WouldBlock` when another process tries to load the same shard concurrently). Run only one process per device shard at a time; separate simulated devices continue to use separate shard directories.
 - The Streamlit server is intentionally left running at `http://localhost:8502` for hands-on use. Stop it with Ctrl+C in its terminal when finished.
+
+## Phase 3 — Real sync to server — 2026-09-27 19:52 +05:30
+
+Status: PASS
+
+What was built:
+- `src/sync_worker.py`: in-memory upload queue, persisted `local_only` point recovery on worker runs, named-vector server collection creation, batched upsert, Qdrant partial-snapshot request using the immutable shard manifest, Edge snapshot restore, timestamp-filter purge, and start/stop background-thread helpers.
+- `src/write_path.py`: every successful local insert now enters the upload queue after the Edge upsert.
+- `scripts/smoke_test_phase3.py`: online end-to-end sync test and `--offline-branch`, which blocks socket connections and checks local search remains usable.
+- Server collection choice: use the existing `QDRANT_COLLECTION=field_memories` setting (`.env.example`) rather than modifying the reference demo's `smart_glasses` collection. No collections or existing server points were deleted.
+- Added post-purge verification and a bounded retry of the same timestamp cutoff filter: an integration run exposed one uploaded point surviving the first filter application; the retry now refuses to report success if uploaded IDs remain mutable.
+
+What was run to verify it (commands + real output snippets):
+
+1) `docker ps --filter "name=qdrant" --format "{{.Names}} {{.Status}} {{.Ports}}"`:
+
+```text
+qdrant Up 7 hours 0.0.0.0:6333->6333/tcp, [::]:6333->6333/tcp
+```
+
+2) ` .\.venv\Scripts\python.exe scripts\smoke_test_phase3.py` against the live Docker server:
+
+```text
+SERVER_POINT_COUNT before=7 after=9 uploaded=2
+SHARDS before_mutable=2 after_mutable=0 immutable_after=9 restored=2
+SYNC_STATUS server=synced immutable=synced queue_after=0
+PARTIAL_SNAPSHOT=PASS bytes=198656 purged=2 cutoff=1790518919.765625
+PHASE3_ONLINE_OK device_id=phase3-smoke-1cd046b2 points=2
+```
+
+The count includes earlier Phase 3 probe points; the test uses unique device IDs and leaves existing Qdrant data intact.
+
+3) ` .\.venv\Scripts\python.exe scripts\smoke_test_phase3.py --offline-branch`:
+
+```text
+offline, skipping sync
+OFFLINE_BRANCH=PASS blocked_attempts=0 local_hits=1 mutable=1 immutable=0 queued=1
+PHASE3_OFFLINE_OK device_id=phase3-offline-8cf966c4
+```
+
+Integration check with previous phases:
+- In one PowerShell session, ran `docker ps`, then Phase 1, Phase 2, Phase 3 online, and Phase 3 offline smoke tests in order; all passed.
+- Phase 1 remained offline-safe: `OFFLINE_SOCKET_GUARD=PASS blocked_attempts=0 OFFLINE=1`; final search max was 97.00 ms.
+- Phase 2 passed empty-immutable passthrough and merge/dedupe: `DEDUP=PASS before=5 after=4 duplicates_removed=1`; memory list was `listed=4 mutable=3 immutable=2`.
+- Phase 3 online passed real server upsert, partial restore, and purge; offline passed with zero blocked socket attempts. Editor diagnostics reported no errors in Phase 3 files.
+
+Known issues / TODOs carried forward:
+- Edge WAL still permits only one process per device shard at a time; use separate device IDs/shard directories for concurrent simulated devices.
+- The background worker is exposed through `start_sync_worker(device_id)`; smoke verification exercises `run_sync_once` to make results deterministic. There is not yet a dashboard sync control (dashboard sync log/toggle are Phase 5 work).
+- `field_memories` accumulates smoke/probe points on the local Qdrant server so tests avoid destructive cleanup. Use a fresh local server or an explicitly approved cleanup before a presentation if a clean collection is required.
+
+### Phase 3 follow-up — dashboard worker wiring — 2026-09-27 19:53 +05:30
+
+- Wired the long-running Streamlit process to start one background worker for its selected device; `OFFLINE=1` continues to short-circuit all network access.
+- Browser reload at `http://localhost:8502` completed without a runtime error. The previously added device-a note was then retrieved from Qdrant with `sync_status="synced"`:
+
+```text
+DASHBOARD_WORKER_SERVER_COUNT 10
+DASHBOARD_WORKER_POINT [('ed103050-cfc2-413b-a9e3-a7de4afda12f', {'text': 'Valve 8 pressure measured 39 psi during the field inspection.', 'device_id': 'device-a', 'timestamp': 1790515138.6104856, 'access_count': 0, 'last_accessed': 1790515138.6104856, 'size_bytes': 61, 'sensitivity': 'low', 'sync_status': 'synced'})]
+```
+
+- This validates the dashboard-started worker against the live server, in addition to the sequential Phase 1–3 smoke tests above. Diagnostics report no errors in `dashboard/app.py`, `src/sync_worker.py`, or `src/write_path.py`.
