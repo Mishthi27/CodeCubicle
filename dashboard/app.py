@@ -18,17 +18,17 @@ st.markdown(
     """
     <style>
     :root {
-        --paper: #eeece3;
-        --ink: #182722;
-        --muted: #68746c;
-        --line: #d2d1c4;
-        --forest: #17352d;
-        --forest-soft: #315b49;
-        --signal: #e06f43;
-        --signal-soft: #f4dfd2;
-        --white: #fbfaf5;
-        --moss: #a6b597;
-        --grid: rgba(23, 53, 45, 0.065);
+        --paper: #10091b;
+        --ink: #f4efff;
+        --muted: #b9adc9;
+        --line: #403052;
+        --forest: #26163b;
+        --forest-soft: #392351;
+        --signal: #b7a0ff;
+        --signal-soft: #302244;
+        --white: #1b1128;
+        --moss: #c1b2ff;
+        --grid: rgba(189, 166, 255, 0.065);
     }
     .stApp {
         color: var(--ink);
@@ -36,23 +36,28 @@ st.markdown(
         background-image:
             linear-gradient(90deg, transparent 97%, var(--grid) 98%),
             linear-gradient(0deg, transparent 97%, var(--grid) 98%);
-        background-size: 34px 34px;
+        background-size: 34px 34px, 34px 34px, 100% 100%;
+        background-image:
+            linear-gradient(90deg, transparent 97%, var(--grid) 98%),
+            linear-gradient(0deg, transparent 97%, var(--grid) 98%),
+            linear-gradient(135deg, #10091b 0%, #160d25 52%, #10091b 100%);
     }
-    [data-testid="stHeader"] { background: rgba(238, 236, 227, 0.94); }
+    [data-testid="stHeader"] { background: rgba(16, 9, 27, 0.94); }
+    [data-testid="stAppViewContainer"] { background: transparent; }
     [data-testid="stAppViewContainer"] > .main .block-container {
         max-width: 1440px;
         padding-top: 0.8rem;
         padding-bottom: 2.5rem;
     }
     [data-testid="stSidebar"] {
-        background: var(--forest);
-        border-right: 1px solid #305447;
+        background: #170d24;
+        border-right: 1px solid #38254d;
     }
-    [data-testid="stSidebar"] * { color: #eff4ed; }
-    [data-testid="stSidebar"] input { color: var(--ink); }
+    [data-testid="stSidebar"] * { color: #f4efff; }
+    [data-testid="stSidebar"] input { color: var(--ink); background: #21152f; }
     [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
     [data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
-        color: #cad8cf;
+        color: #bdafcf;
     }
     .fm-rail-mark {
         display: inline-flex;
@@ -61,9 +66,9 @@ st.markdown(
         width: 42px;
         height: 42px;
         margin: 0.2rem 0 1rem;
-        border: 1px solid #9ead94;
+        border: 1px solid #79659b;
         border-radius: 50%;
-        color: #f7f2e5;
+        color: #eee6ff;
         font: 700 12px/1 Consolas, monospace;
     }
     .fm-header {
@@ -73,28 +78,28 @@ st.markdown(
         align-items: center;
         justify-content: space-between;
         gap: 1.5rem;
-        min-height: 148px;
+        min-height: 156px;
         margin: 0.15rem 0 0;
         padding: 1.25rem 1.65rem;
-        border: 1px solid #315347;
-        border-radius: 5px 5px 0 0;
-        background-color: var(--forest);
+        border: 1px solid #46305f;
+        border-radius: 18px 18px 0 0;
+        background-color: #20122f;
         background-image:
-            repeating-radial-gradient(ellipse at 84% 42%, transparent 0 19px, rgba(213, 224, 199, 0.13) 20px 21px, transparent 22px 39px),
-            linear-gradient(118deg, transparent 54%, rgba(166, 181, 151, 0.09) 54.2%, transparent 54.6%);
-        color: #f7f2e5;
+            repeating-radial-gradient(ellipse at 84% 42%, transparent 0 19px, rgba(208, 190, 255, 0.13) 20px 21px, transparent 22px 39px),
+            linear-gradient(118deg, #211332 0%, #2a1940 57%, #241438 100%);
+        color: #f7f2ff;
     }
     .fm-eyebrow {
         margin: 0 0 0.45rem;
-        color: #c4d0b5;
+        color: #c9b8ee;
         font: 700 10px/1.3 Consolas, monospace;
         letter-spacing: 0.12em;
         text-transform: uppercase;
     }
     .fm-title {
         margin: 0;
-        color: #fbf7ec;
-        font: 400 43px/1.02 Georgia, 'Times New Roman', serif;
+        color: #faf7ff;
+        font: 700 42px/1.02 'Trebuchet MS', 'Segoe UI', sans-serif;
         letter-spacing: 0;
     }
     .fm-header-note {
@@ -102,7 +107,7 @@ st.markdown(
         min-width: 190px;
         padding: 0.75rem 0 0.75rem 1rem;
         border-left: 2px solid var(--signal);
-        color: #e3e8d8;
+        color: #e2d8f4;
         font: 600 11px/1.7 Consolas, monospace;
         text-align: right;
     }
@@ -115,15 +120,15 @@ st.markdown(
         padding: 0.65rem 1rem;
         border: 1px solid var(--line);
         border-top: 0;
-        border-radius: 0 0 5px 5px;
-        background: rgba(251, 250, 245, 0.92);
+        border-radius: 0 0 14px 14px;
+        background: #1a1027;
         color: var(--muted);
         font: 600 10px/1.35 Consolas, monospace;
         text-transform: uppercase;
     }
     .fm-status-strip strong { color: var(--ink); }
-    .fm-status-live { color: #276746; }
-    .fm-status-offline { color: #b44828; }
+    .fm-status-live { color: #9fe1be; }
+    .fm-status-offline { color: #ffad94; }
     .fm-tab-note {
         margin: 0.1rem 0 1rem;
         color: var(--muted);
@@ -131,7 +136,7 @@ st.markdown(
     }
     .fm-section-label {
         margin: 1.3rem 0 0.55rem;
-        color: var(--forest-soft);
+        color: #c8b5ef;
         font: 700 10px/1.2 Consolas, monospace;
         letter-spacing: 0.12em;
         text-transform: uppercase;
@@ -140,62 +145,62 @@ st.markdown(
     [data-testid="stTabs"] [data-baseweb="tab-list"] {
         gap: 0.3rem;
         padding: 0.35rem;
-        border: 1px solid #c9cdc0;
-        border-radius: 5px;
-        background: #e3e4d9;
+        border: 1px solid #3c2b51;
+        border-radius: 999px;
+        background: #1b1128;
     }
     [data-testid="stTabs"] button[role="tab"] {
         height: 2.45rem;
-        padding: 0 1rem;
-        border-radius: 4px;
-        color: #58665d;
+        padding: 0 1.1rem;
+        border-radius: 999px;
+        color: #b9adc9;
         font: 700 11px/1 Consolas, monospace;
         letter-spacing: 0.04em;
         text-transform: uppercase;
     }
     [data-testid="stTabs"] button[aria-selected="true"] {
-        background: var(--forest);
-        color: #fbf7ec;
-        box-shadow: inset 0 -2px var(--signal);
+        background: #6747a0;
+        color: #fffaff;
+        box-shadow: 0 3px 10px rgba(8, 4, 15, 0.28);
     }
     .stButton > button, [data-testid="stFormSubmitButton"] > button {
         min-height: 2.55rem;
-        border: 1px solid var(--forest);
-        border-radius: 4px;
-        background: var(--forest);
+        border: 1px solid #8062b5;
+        border-radius: 999px;
+        background: #63458f;
         color: white;
-        font: 700 12px Consolas, monospace;
+        font: 700 12px 'Trebuchet MS', sans-serif;
     }
     .stButton > button:hover, [data-testid="stFormSubmitButton"] > button:hover {
-        border-color: var(--forest-soft);
-        background: var(--forest-soft);
+        border-color: #9277bf;
+        background: #7958aa;
         color: white;
     }
     [data-testid="stMetric"] {
         padding: 0.7rem 0.85rem;
         border: 1px solid var(--line);
-        border-radius: 4px;
-        background: var(--white);
+        border-radius: 14px;
+        background: #1b1128;
     }
     [data-testid="stMetricLabel"] p {
         color: var(--muted);
         font: 700 10px/1.3 Consolas, monospace;
         text-transform: uppercase;
     }
-    [data-testid="stMetricValue"] { color: var(--forest); }
+    [data-testid="stMetricValue"] { color: #e4d9ff; }
     [data-testid="stTextInput"] input,
     [data-testid="stTextArea"] textarea,
     [data-testid="stSelectbox"] [data-baseweb="select"] > div {
         border-radius: 4px;
-        background: var(--white);
+        background: #1b1128;
     }
     [data-testid="stForm"] {
         padding: 1rem;
-        border: 1px solid #cfcec1;
-        border-top: 2px solid var(--forest-soft);
-        border-radius: 4px;
-        background: var(--white);
-        box-shadow: 0 4px 12px rgba(29, 48, 39, 0.035);
+        border: 1px solid #443257;
+        border-top: 2px solid #8263b0;
+        border-radius: 15px;
+        background: #1b1128;
+        box-shadow: 0 8px 22px rgba(4, 2, 10, 0.18);
     }
     .fm-record-list { border-top: 1px solid var(--line); }
     .fm-record {
@@ -204,18 +209,20 @@ st.markdown(
         gap: 0.75rem;
         align-items: center;
         padding: 0.82rem 0.55rem;
-        border-bottom: 1px solid var(--line);
-        background: rgba(251, 250, 245, 0.82);
+        margin: 0.38rem 0;
+        border: 1px solid #3b2b50;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #1d132b, #251737);
     }
     .fm-record-index {
         align-self: start;
         padding-top: 0.1rem;
-        color: #9a6a4b;
+        color: #c3a8ff;
         font: 700 10px Consolas, monospace;
     }
     .fm-record-text {
         color: var(--ink);
-        font: 400 15px/1.45 Georgia, serif;
+        font: 500 15px/1.5 'Trebuchet MS', 'Segoe UI', sans-serif;
         overflow-wrap: anywhere;
     }
     .fm-record-meta {
@@ -231,50 +238,51 @@ st.markdown(
     .fm-tag {
         display: inline-block;
         padding: 0.25rem 0.4rem;
-        border: 1px solid #c7d0c3;
-        border-radius: 3px;
-        background: #eef1e8;
-        color: #315b49;
+        border: 1px solid #594276;
+        border-radius: 999px;
+        background: #302142;
+        color: #d9caff;
     }
     .fm-tag-signal {
-        border-color: #e5b59d;
-        background: var(--signal-soft);
-        color: #93462d;
+        border-color: #83566a;
+        background: #3b233e;
+        color: #ffb69b;
     }
     .fm-record-reason {
         grid-column: 2 / 4;
         margin-top: -0.4rem;
-        color: var(--muted);
-        font: 400 11px/1.45 Consolas, monospace;
+        color: #ad9fbe;
+        font: 400 11px/1.45 'Trebuchet MS', sans-serif;
         overflow-wrap: anywhere;
     }
-    .fm-score { color: var(--signal); font: 700 11px Consolas, monospace; }
+    .fm-score { color: #c6afff; font: 700 11px Consolas, monospace; }
     .fm-sync-row {
         display: grid;
         grid-template-columns: 165px 1fr repeat(4, minmax(68px, 95px));
         gap: 0.6rem;
         align-items: center;
         padding: 0.7rem 0.55rem;
-        border-bottom: 1px solid var(--line);
-        background: rgba(251, 250, 245, 0.82);
+        margin: 0.38rem 0;
+        border: 1px solid #3c2b52;
+        border-radius: 12px;
+        background: #1d132b;
         font: 11px/1.4 Consolas, monospace;
     }
-    .fm-sync-row:first-child { border-top: 1px solid var(--line); }
-    .fm-sync-event { color: var(--forest-soft); font-weight: 700; }
+    .fm-sync-event { color: #ccbaff; font-weight: 700; }
     .fm-conflict {
         margin: 0.55rem 0;
         padding: 0.85rem 0.95rem;
-        border: 1px solid var(--line);
+        border: 1px solid #443257;
         border-left: 3px solid var(--signal);
-        border-radius: 3px;
-        background: var(--white);
+        border-radius: 14px;
+        background: linear-gradient(145deg, #21152f, #1a1027);
     }
     .fm-conflict-head {
         display: flex;
         flex-wrap: wrap;
         justify-content: space-between;
         gap: 0.5rem;
-        color: var(--forest);
+        color: #e4d8ff;
         font: 700 11px/1.4 Consolas, monospace;
     }
     .fm-conflict-versions {
@@ -285,12 +293,14 @@ st.markdown(
     }
     .fm-version {
         padding: 0.65rem;
-        border-top: 1px solid var(--line);
-        color: var(--muted);
-        font: 11px/1.45 Consolas, monospace;
+        border: 1px solid #3b2c4f;
+        border-radius: 10px;
+        background: #191024;
+        color: #c2b7d0;
+        font: 12px/1.5 'Trebuchet MS', sans-serif;
         overflow-wrap: anywhere;
     }
-    .fm-version strong { display: block; margin-bottom: 0.3rem; color: var(--ink); }
+    .fm-version strong { display: block; margin-bottom: 0.35rem; color: #eae1fb; }
     .fm-empty {
         padding: 1rem 0.55rem;
         border-top: 1px solid var(--line);
@@ -404,7 +414,7 @@ st.markdown(
     """
     <div class="fm-header">
       <div>
-        <p class="fm-eyebrow">Code Cubicle 6.0 / Field operations</p>
+        <p class="fm-eyebrow">FIELD OPERATIONS / DEVICE MEMORY</p>
         <h1 class="fm-title">Field Memory</h1>
       </div>
       <div class="fm-header-note">LOCAL FIRST<br>SEARCH · DECIDE · SYNC</div>

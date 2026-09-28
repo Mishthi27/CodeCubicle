@@ -560,3 +560,11 @@ Known issues / TODOs carried forward:
 - Limited default visible history to 12 recent sync events, 8 conflict records, and 12 desk/policy notes so accumulated rehearsal data does not swamp the workspace; full JSONL records remain preserved.
 - Browser verified all four tabs with real data and no runtime errors. Mobile viewport 390px had document width 390px; desktop viewport 1280px had document width 1280px. Search/Ask displayed the Phase 7 live note and its labeled source notes. Offline=false, health endpoint remains 200.
 - `dashboard/app.py` diagnostics are clean and `git diff --check` passes; Git only reports the repository's LF-to-CRLF working-copy warning.
+
+### Phase 7 visual revision — purple product direction — 2026-09-28 19:13 +05:30
+
+- Removed the `Code Cubicle 6.0` eyebrow from the dashboard masthead; product title remains **Field Memory**.
+- Applied the requested deep aubergine base (`#10091b`), layered purple surfaces (`#1b1128`, `#26163b`), lavender signal/active color (`#b7a0ff`), and high-contrast soft-white text. Retained the field map treatment as a subtle texture, now recolored to the purple palette.
+- Updated design tokens across the existing information architecture: rounded 12–18px note/conflict surfaces, pill tabs/actions/status tags, stronger sans display hierarchy, softer borders, and more open spacing. Existing Field desk, Sync log, Conflicts, and Policy & metrics tabs and all actions remain unchanged.
+- Kept custom field-note, search result, sync event, and conflict version renderers; visible history remains capped to 12 notes/events and 8 conflicts for a calmer default screen. Full persisted records remain untouched.
+- Browser verification after Streamlit rerun: title `Field Memory`; old `Code Cubicle 6.0` string absent; all four tabs present; Offline=false; page health HTTP 200; browser content width equals client width (783px in the integrated browser surface). Editor diagnostics report no errors in `dashboard/app.py`.
