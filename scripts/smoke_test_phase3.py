@@ -86,6 +86,7 @@ def run_online() -> None:
             f"PARTIAL_SNAPSHOT=PASS bytes={report['snapshot_bytes']} "
             f"purged={report['purged']} cutoff={report['purged_cutoff']:.6f}"
         )
+        print(f"SYNC_ROUND_TRIP_MS={report['round_trip_ms']:.2f}")
         print(f"PHASE3_ONLINE_OK device_id={device_id} points={len(point_ids)}")
     finally:
         client.close()

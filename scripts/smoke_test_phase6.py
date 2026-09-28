@@ -132,6 +132,10 @@ def run_round(round_number: int, client: QdrantClient, collection_name: str) -> 
         f"sync_events={len(round_events)} conflict_records={len(conflicts)} "
         f"mutable_a=0 mutable_b=0"
     )
+    print(
+        f"SYNC_ROUND_TRIP_MS device_a={report_a['round_trip_ms']:.2f} "
+        f"device_b={report_b['round_trip_ms']:.2f}"
+    )
     close_all_shards()
     return {
         "round": round_number,

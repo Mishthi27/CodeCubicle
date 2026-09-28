@@ -172,19 +172,32 @@ def run_sync_once(
     device_id: str,
     offline: bool | None = None,
 ) -> dict:
+    sync_started = time.perf_counter()
     if offline is None:
         offline = _is_offline()
     if offline:
         logger.info("offline, skipping sync")
         _append_sync_event({"device_id": device_id, "event": "offline_skipped"})
-        return {"offline": True, "uploaded": 0, "pulled": 0, "purged": 0}
+        return {
+            "offline": True,
+            "uploaded": 0,
+            "pulled": 0,
+            "purged": 0,
+            "round_trip_ms": (time.perf_counter() - sync_started) * 1000,
+        }
 
     with _sync_lock:
         points = _pending_points(device_id)
         if not points:
             logger.info("no pending points for device_id=%s", device_id)
             _append_sync_event({"device_id": device_id, "event": "idle"})
-            return {"offline": False, "uploaded": 0, "pulled": 0, "purged": 0}
+            return {
+                "offline": False,
+                "uploaded": 0,
+                "pulled": 0,
+                "purged": 0,
+                "round_trip_ms": (time.perf_counter() - sync_started) * 1000,
+            }
 
         base_url = os.getenv("QDRANT_URL", "http://localhost:6333")
         collection_name = os.getenv("QDRANT_COLLECTION", "field_memories")
@@ -326,6 +339,7 @@ def run_sync_once(
                 "mutable_after": mutable_after,
                 "immutable_after": immutable_after,
                 "purged": mutable_before - mutable_after,
+                "round_trip_ms": (time.perf_counter() - sync_started) * 1000,
             }
             _append_sync_event(
                 {
@@ -337,7 +351,13 @@ def run_sync_once(
                     "snapshot_bytes": snapshot_bytes,
                     "purged": report["purged"],
                     "conflicts": conflict_records,
+                    "round_trip_ms": report["round_trip_ms"],
                 }
+            )
+            logger.info(
+                "sync round_trip_ms=%.2f device_id=%s",
+                report["round_trip_ms"],
+                device_id,
             )
             return report
         finally:

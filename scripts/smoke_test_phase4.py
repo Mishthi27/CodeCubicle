@@ -80,7 +80,8 @@ def verify_real_conflict() -> None:
         )[0]
         rejected = next(record for record in rejected_records if str(record.id) == rejected_id)
         assert rejected.payload["sync_decision"] == "keep_local"
-        assert "high sensitivity" in rejected.payload["sync_reason"]
+        reason = rejected.payload["sync_reason"].lower()
+        assert "high sensitivity" in reason or "sensitivity=high" in reason
         assert queued_count(rejected_device) == 0
 
         offline_report = run_sync_once(device_a)

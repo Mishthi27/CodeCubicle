@@ -501,3 +501,62 @@ Integration check with previous phases:
 Known issues / TODOs carried forward:
 - The optional local GGUF generator was intentionally omitted because this machine has no cached model or installed llama.cpp runtime and the configured pip index reset the wheel lookup. Ask is a transparent grounded retrieval template, not an LLM-generated answer.
 - The repeated rehearsal uses unique device IDs with the required `device-a` / `device-b` prefixes so it does not overwrite the persistent demo shards or contend with the dashboard's open device-a WAL.
+
+## Phase 7 — Final integration + demo readiness — 2026-09-28 13:57 +05:30
+
+Status: PARTIAL (all software and integration gates pass; backup video not recorded in this browser environment)
+
+What was built:
+- `dashboard/app.py`: redesigned as a field-operations console with an evergreen/graphite/signal palette, compact status strip, responsive layout, and four focused tabs: Field desk, Sync log, Conflicts, and Policy & metrics. Existing add/search/Ask, status, policy reasons, metrics, shard counts, sync history, and conflict details remain available.
+- `scripts/full_demo_dryrun.py`: one command runs Phase 1 offline search, Phase 2 merge/dedupe, Phase 3 online and offline branches, Phase 4 policy/conflicts, Phase 5 trained integration, and the Phase 6 two-round rehearsal, reporting elapsed time per step and stopping on failure.
+- `process.md`: manual operator/demo guide covers setup, local note entry, offline search and Ask, policy inspection, sync/conflict explanation, repeatable rehearsal, demo sequence, recovery, and backup-video recording instructions. README links to it.
+- `src/sync_worker.py`, `scripts/smoke_test_phase3.py`, `scripts/smoke_test_phase6.py`: report measured end-to-end upload → partial snapshot restore → purge round-trip duration.
+- `scripts/smoke_test_phase4.py`: corrected its sensitive-write explanation assertion to accept trained-model wording as well as the original rule wording; behavior still asserts keep-local, no queue, and absence from the server.
+
+What was run to verify it (commands + real output snippets):
+
+1) ` .\.venv\Scripts\python.exe scripts\full_demo_dryrun.py` ran every prior phase in one PowerShell session:
+
+```text
+PHASE1_SMOKE_OK inserted=6 queries=3 device_id=phase1-smoke-642c3583
+PHASE2_SMOKE_OK mutable=3 immutable=2 unique_results=4
+PHASE3_ONLINE_OK device_id=phase3-smoke-423215e3 points=2
+PHASE3_OFFLINE_OK device_id=phase3-offline-c73a4540
+PHASE4_SMOKE_OK
+PHASE5_SMOKE_OK
+PHASE6_SMOKE_OK rounds=2 device_processes=4
+FULL_DEMO_DRYRUN_PASS phases=7 elapsed_s=78.94
+```
+
+Phase 1 max query latency in that run was **7.59 ms**. Phase 3's real round trip (upsert + partial snapshot + purge) was **2,020.91 ms**; Phase 4's two syncs measured **2,050.63 ms** and **2,051.05 ms**; Phase 6's four device syncs were **2,302.28 ms**, **2,095.16 ms**, **2,038.74 ms**, and **2,121.38 ms**. All printed successful partial restore, purge, and offline guards.
+
+2) Browser verification at `http://localhost:8502`:
+- The redesigned dashboard renders all four tabs and their data without runtime errors. At 390px viewport width, document width was also 390px; the 1280px desktop view likewise had no horizontal overflow.
+- Live walkthrough: enabled Offline, saved `Phase 7 live drill: north pump pressure measured 41 psi at the service gate.`, searched locally at **8.71 ms**, and asked a grounded question with source notes shown. Turned Offline off; Qdrant retrieve confirmed point `91d26b7f-20c8-4193-9720-2341cc5ea14a` arrived with `sync_status="synced"`.
+- Streamlit returned HTTP 200 for its health endpoint. Editor diagnostics found no errors in the dashboard, full runner, and phase smoke scripts. `git diff --check` reported no whitespace errors; Git noted the existing README LF/CRLF conversion warning.
+
+3) Backup recording attempt:
+
+```text
+Streamlit Record screen → ScreenCastRecorder.initialize error: NotSupportedError
+```
+
+No video file was produced; `process.md` now gives the exact OBS Studio / Windows Xbox Game Bar fallback. The plan also calls for a human watching and confirming the final run; automated browser checks were performed, but a human presentation rehearsal remains for the user.
+
+Integration check with previous phases:
+- The unified runner passed all Phase 1–6 checks in order after repairing the Phase 4 smoke assertion. Offline insertion/search, dual-shard search, live upsert/partial restore/purge, policy gating, trained metrics, two-device conflict resolution, Ask fallback, and persistent logs all passed.
+- Final dashboard is available at `http://localhost:8502`, online; Qdrant remains on port 6333. No server collections or accumulated test data were deleted.
+
+Known issues / TODOs carried forward:
+- **Manual before presentation:** capture the backup demo video with OBS Studio or Windows Xbox Game Bar. The integrated browser's Streamlit recorder is unsupported (`NotSupportedError`).
+- **Manual before presentation:** have a human watch the complete walkthrough and confirm the demo beats land; the 78.94-second automated suite does not substitute for that acceptance check.
+- Optional llama.cpp/GGUF inference remains omitted as recorded in Phase 6; Ask uses local retrieval with a transparent answer template.
+- Phase 5 classifier metrics are on held-out synthetic labels generated from Phase 4 rules, not independent real-world labels.
+
+### Phase 7 visual revision — user feedback follow-up — 2026-09-28 14:53 +05:30
+
+- Reworked the dashboard beyond a color-only change: topographic field-map masthead, cartographic grid canvas, instrument-style status strip, terminal-like tab labels, print-paper palette, and custom escaped field-note, sync-event, and conflict-version rows.
+- Removed generic dataframes from the field/search/Ask, sync log, conflict, and per-write policy surfaces. Search results show scores; notes show sync/policy tags and reason; conflicts compare local/server versions side by side.
+- Limited default visible history to 12 recent sync events, 8 conflict records, and 12 desk/policy notes so accumulated rehearsal data does not swamp the workspace; full JSONL records remain preserved.
+- Browser verified all four tabs with real data and no runtime errors. Mobile viewport 390px had document width 390px; desktop viewport 1280px had document width 1280px. Search/Ask displayed the Phase 7 live note and its labeled source notes. Offline=false, health endpoint remains 200.
+- `dashboard/app.py` diagnostics are clean and `git diff --check` passes; Git only reports the repository's LF-to-CRLF working-copy warning.

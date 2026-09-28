@@ -34,6 +34,7 @@ uv run streamlit run app.py
 Windows has no `make`; the commands above are the Makefile `setup` / `backend` / `demo` targets.
 
 See `BUILD_PLAN.md` for phases and `PROGRESS.md` for verification logs.
+See [`process.md`](process.md) for the manual operator/demo walkthrough.
 
 ### Train the sync policy (Phase 5)
 
